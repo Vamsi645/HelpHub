@@ -7,7 +7,7 @@ A small full-stack home-services booking project built with React, Express, and 
 - Customer and worker registration/sign-in with bcrypt password hashes and JWT authentication.
 - Service catalog backed by MySQL with name/category search and starting prices.
 - Customers create bookings, view their own bookings, and cancel pending or confirmed bookings.
-- Workers maintain a basic profile and move assigned work through `pending -> confirmed -> in_progress -> completed`.
+- Workers maintain a basic profile, claim unassigned service requests, and move assigned work through `confirmed -> in_progress -> completed`.
 - Admins view customer/worker enrollments, assign available workers, update booking statuses, and see live booking and revenue totals.
 - Backend role checks protect customer, worker, and admin endpoints.
 
@@ -101,7 +101,7 @@ Enter the admin name, email, and password when prompted. Password input is hidde
 
 1. Register a customer and a worker from the site.
 2. Sign in as the customer, select a service, choose a future date/time, and create a booking.
-3. Sign in as the admin, assign an available worker to the pending booking, and view the enrollment and booking totals.
+3. Sign in as a worker and accept the unassigned service request, or sign in as the admin to assign a worker.
 4. Sign in as the assigned worker and update the booking through each allowed status until it is completed.
 5. Return to the admin dashboard and refresh to see the completed count and revenue summary update.
 
@@ -109,6 +109,7 @@ Enter the admin name, email, and password when prompted. Password input is hidde
 
 - Customers can only view their own bookings.
 - Customers can cancel bookings that are `pending` or `confirmed`.
+- Available workers can claim unassigned pending bookings. Only one worker can claim a request; its address is shown only after it is accepted.
 - An assigned worker can only update their own booking, one step at a time: `pending -> confirmed -> in_progress -> completed`.
 - Admins assign available workers to pending bookings and can manage permitted status changes.
 - Booking prices are copied from the current service price when the booking is created. Later price changes do not alter existing bookings.
@@ -127,6 +128,8 @@ Enter the admin name, email, and password when prompted. Password input is hidde
 | `GET` | `/api/bookings/mine` | Customer | List own bookings |
 | `POST` | `/api/bookings/:id/cancel` | Customer | Cancel an eligible booking |
 | `GET` | `/api/bookings/worker` | Worker | List assigned bookings |
+| `GET` | `/api/bookings/worker/available` | Worker | List unassigned pending service requests |
+| `POST` | `/api/bookings/:id/accept` | Available worker | Claim an unassigned request |
 | `PATCH` | `/api/bookings/:id/status` | Assigned worker | Advance a booking status |
 | `GET` | `/api/admin/dashboard` | Admin | Read live summary totals |
 | `GET` | `/api/admin/users` | Admin | List customer/worker enrollments |

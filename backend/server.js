@@ -275,6 +275,64 @@ app.get('/api/bookings/worker', authenticate, allow('worker'), endpoint(async (r
   res.json({ bookings });
 }));
 
+app.get('/api/bookings/worker/available', authenticate, allow('worker'), endpoint(async (req, res) => {
+  const [bookings] = await pool.execute(
+    `SELECT b.id, b.scheduled_at AS scheduledAt, b.price_at_booking AS priceAtBooking,
+            b.status, s.name AS serviceName
+     FROM bookings AS b INNER JOIN services AS s ON s.id = b.service_id
+     WHERE b.worker_id IS NULL AND b.status = 'pending'
+     ORDER BY b.scheduled_at ASC`
+  );
+  res.json({ bookings });
+}));
+
+app.post('/api/bookings/:bookingId/accept', authenticate, allow('worker'), endpoint(async (req, res) => {
+  const bookingId = parseId(req.params.bookingId);
+  if (!bookingId) return res.status(400).json({ message: 'Invalid booking ID.' });
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [profiles] = await connection.execute(
+      'SELECT id, availability FROM worker_profiles WHERE user_id = ? FOR UPDATE',
+      [req.user.id]
+    );
+    if (!profiles.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Worker profile was not found.' });
+    }
+    if (profiles[0].availability !== 'available') {
+      await connection.rollback();
+      return res.status(409).json({ message: 'Set your availability to available before accepting a service.' });
+    }
+
+    const [bookings] = await connection.execute(
+      "SELECT status, worker_id FROM bookings WHERE id = ? FOR UPDATE",
+      [bookingId]
+    );
+    if (!bookings.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Service request was not found.' });
+    }
+    if (bookings[0].status !== 'pending' || bookings[0].worker_id !== null) {
+      await connection.rollback();
+      return res.status(409).json({ message: 'This service request is no longer available.' });
+    }
+
+    await connection.execute(
+      "UPDATE bookings SET worker_id = ?, status = 'confirmed' WHERE id = ?",
+      [profiles[0].id, bookingId]
+    );
+    await connection.commit();
+    res.json({ status: 'confirmed', workerId: profiles[0].id });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}));
+
 app.post('/api/bookings/:bookingId/cancel', authenticate, allow('customer'), endpoint(async (req, res) => {
   const bookingId = parseId(req.params.bookingId);
   if (!bookingId) return res.status(400).json({ message: 'Invalid booking ID.' });

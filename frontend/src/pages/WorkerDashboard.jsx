@@ -4,16 +4,19 @@ import { apiRequest } from '../services/api.js';
 export default function WorkerDashboard({ user, onBack }) {
   const [profile, setProfile] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [availableBookings, setAvailableBookings] = useState([]);
   const [form, setForm] = useState({ experienceYears: '0', serviceArea: '', availability: 'available' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [acceptingId, setAcceptingId] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   const loadWorkerData = useCallback(async () => {
-    const [profileResult, bookingsResult] = await Promise.all([
+    const [profileResult, bookingsResult, availableResult] = await Promise.all([
       apiRequest('/workers/me'),
-      apiRequest('/bookings/worker')
+      apiRequest('/bookings/worker'),
+      apiRequest('/bookings/worker/available')
     ]);
     setProfile(profileResult.worker);
     setForm({
@@ -22,6 +25,7 @@ export default function WorkerDashboard({ user, onBack }) {
       availability: profileResult.worker.availability
     });
     setBookings(bookingsResult.bookings);
+    setAvailableBookings(availableResult.bookings);
   }, []);
 
   useEffect(() => {
@@ -69,6 +73,21 @@ export default function WorkerDashboard({ user, onBack }) {
     }
   }
 
+  async function acceptBooking(bookingId) {
+    setAcceptingId(bookingId);
+    setError('');
+    setNotice('');
+    try {
+      await apiRequest(`/bookings/${bookingId}/accept`, { method: 'POST' });
+      await loadWorkerData();
+      setNotice('Service accepted. The customer address is now available in your assigned bookings.');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setAcceptingId(null);
+    }
+  }
+
   return (
     <main className="worker-dashboard-page">
       <header className="topbar catalog-topbar">
@@ -108,6 +127,32 @@ export default function WorkerDashboard({ user, onBack }) {
         {profile && (
           <div className="worker-tasks">
             <section>
+              <div className="worker-section-heading">
+                <h2>Available service requests</h2>
+                <span>{availableBookings.length}</span>
+                <button className="admin-refresh" type="button" onClick={() => loadWorkerData().catch((requestError) => setError(requestError.message))}>Refresh</button>
+              </div>
+              {profile.availability === 'unavailable' && <p className="catalog-message">Set your availability to available to accept service requests.</p>}
+              {profile.availability === 'available' && availableBookings.length === 0 && <p className="catalog-message">No unassigned service requests right now.</p>}
+              {availableBookings.map((booking) => (
+                <article className="worker-booking-row" key={booking.id}>
+                  <div className="booking-card-heading">
+                    <div><p className="service-category">{booking.serviceName}</p><h3>Request #{booking.id}</h3></div>
+                    <span className={`booking-status ${booking.status}`}>{booking.status}</span>
+                  </div>
+                  <p className="worker-booking-info">Requested for {new Date(booking.scheduledAt).toLocaleString()}</p>
+                  <button
+                    className="filter-submit"
+                    type="button"
+                    disabled={profile.availability !== 'available' || acceptingId !== null}
+                    onClick={() => acceptBooking(booking.id)}
+                  >
+                    {acceptingId === booking.id ? 'Accepting...' : 'Accept service'}
+                  </button>
+                </article>
+              ))}
+            </section>
+            <section>
               <div className="worker-section-heading"><h2>Assigned bookings</h2><span>{bookings.length}</span></div>
               {bookings.length === 0 && <p className="catalog-message">No assigned bookings yet.</p>}
               {bookings.map((booking) => {
@@ -121,7 +166,7 @@ export default function WorkerDashboard({ user, onBack }) {
                     </div>
                     <p className="worker-booking-info">{booking.serviceAddress}</p>
                     <p className="worker-booking-info">{new Date(booking.scheduledAt).toLocaleString()}</p>
-                    {nextStatus && <button className="filter-submit" type="button" onClick={() => updateBookingStatus(booking.id, nextStatus)}>{nextLabel}</button>}
+                    {nextStatus && <button className="filter-submit" type="button" disabled={acceptingId !== null} onClick={() => updateBookingStatus(booking.id, nextStatus)}>{nextLabel}</button>}
                   </article>
                 );
               })}
