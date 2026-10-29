@@ -1,5 +1,3 @@
-USE az_home_services;
-
 INSERT INTO service_categories (name, description) VALUES
   ('Cleaning', 'Home cleaning and upkeep'),
   ('Plumbing', 'Repairs and fixture installation'),
