@@ -511,6 +511,10 @@ app.use((error, req, res, next) => {
   res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'An unexpected server error occurred.' });
 });
 
-app.listen(port, () => {
-  console.log(`HelpHub API listening at http://localhost:${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`HelpHub API listening at http://localhost:${port}`);
+  });
+}
+
+module.exports = app;
